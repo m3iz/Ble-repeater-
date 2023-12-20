@@ -92,8 +92,12 @@ static void set_public_addr(void)
 static void scan_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
 		    struct net_buf_simple *buf)
 {
+	bt_addr_le_t temp = *addr;
+	bt_addr_t tempadr=temp.a;
+    if(tempadr.val[5]==16)
+		deviceFound = true;
 	mfg_data[2]++;
-	deviceFound = true;
+	//deviceFound = true;
 }
 
 
@@ -178,10 +182,10 @@ int main(void)
 		printk("Bluetooth init failed (err %d)\n", err);
 	}
 	printk("Starting Scanner/Advertiser Demo\n");
-	//if(deviceFound){
+	
 	do {
 		k_sleep(K_MSEC(400));
-
+		if(deviceFound){
 		/* Start advertising */
 		err = bt_le_adv_start(BT_LE_ADV_NCONN_IDENTITY, ad, ARRAY_SIZE(ad),
 			      sd, ARRAY_SIZE(sd));
@@ -191,7 +195,7 @@ int main(void)
 		}
 
 		k_sleep(K_MSEC(400));
-
+		}
 		err = bt_le_adv_stop();
 		if (err) {
 			printk("Advertising failed to stop (err %d)\n", err);
@@ -199,7 +203,5 @@ int main(void)
 		}
 	} while (1);
 	return 0;
-	//}
-	return 0;
-	
+	//return 0;
 }
