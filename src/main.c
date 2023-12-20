@@ -34,11 +34,9 @@ static const struct pwm_dt_spec pwm_led0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led0));
 #define MIN_PERIOD PWM_SEC(1U) / 128U
 #define MAX_PERIOD PWM_SEC(1U)
 
+bool deviceFound = false;
 
-static bt_addr_le_t custom_addr = {
-    .type = BT_ADDR_LE_PUBLIC,
-    .a.val = {0x01, 0x00, 0x00, 0x00, 0x00, 0x10},
-};
+static uint8_t mfg_data[] = { 0xff, 0xff, 0x00 };
 
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_NO_BREDR),
@@ -85,12 +83,23 @@ static void bt_ready(int err)
 
 }
 
+static void set_public_addr(void)
+{
+	uint8_t pub_addr[BT_ADDR_SIZE] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+	bt_ctlr_set_public_addr(pub_addr);
+}
+
+static void scan_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
+		    struct net_buf_simple *buf)
+{
+	mfg_data[2]++;
+	deviceFound = true;
+}
 
 
 int main(void)
 {
-	static const struct device *const clock0 = DEVICE_DT_GET_ONE(nordic_nrf_clock);
-(void) clock_control_on(clock0, CLOCK_CONTROL_NRF_SUBSYS_HF);
+	set_public_addr();
 	uint32_t max_period;
 	uint32_t period;
 	uint8_t dir = 0U;
@@ -151,11 +160,46 @@ int main(void)
 	/* Initialize the Bluetooth Subsystem */
 	
 	//bt_id_create(&custom_addr, NULL); 
-	err = bt_enable(bt_ready);
+	struct bt_le_scan_param scan_param = {
+		.type       = BT_HCI_LE_SCAN_PASSIVE,
+		.options    = BT_LE_SCAN_OPT_NONE,
+		.interval   = 0x0010,
+		.window     = 0x0010,
+	};
+	err = bt_enable(NULL); //bt_ready
+
+	err = bt_le_scan_start(&scan_param, scan_cb);
+	if (err) {
+		printk("Starting scanning failed (err %d)\n", err);
+		return 0;
+	}
+
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 	}
-//	while(1){}
+	printk("Starting Scanner/Advertiser Demo\n");
+	//if(deviceFound){
+	do {
+		k_sleep(K_MSEC(400));
+
+		/* Start advertising */
+		err = bt_le_adv_start(BT_LE_ADV_NCONN_IDENTITY, ad, ARRAY_SIZE(ad),
+			      sd, ARRAY_SIZE(sd));
+		if (err) {
+			printk("Advertising failed to start (err %d)\n", err);
+			return 0;
+		}
+
+		k_sleep(K_MSEC(400));
+
+		err = bt_le_adv_stop();
+		if (err) {
+			printk("Advertising failed to stop (err %d)\n", err);
+			return 0;
+		}
+	} while (1);
+	return 0;
+	//}
 	return 0;
 	
 }
