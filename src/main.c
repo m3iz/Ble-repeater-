@@ -41,7 +41,8 @@ node_t* hash_table[TABLE_SIZE];
 
 unsigned int hash(char* mac) {
     unsigned int hash_value = 0;
-    for (int i = 0; i < strlen(mac); i++) {
+	int mac_len =  strlen(mac);
+    for (int i = 0; i < mac_len; i++) {
         hash_value = hash_value * 37 + mac[i];
     }
     return hash_value % TABLE_SIZE;
@@ -90,17 +91,10 @@ void delete_node(char* mac) {
 static uint8_t mfg_data[] = { 0xff, 0xff, 0x00 };
 
 static const struct bt_data ad[] = {	
-	BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_NO_BREDR),
-	BT_DATA_BYTES(BT_DATA_UUID16_ALL, 0xaa, 0xfe),
-	BT_DATA_BYTES(BT_DATA_SVC_DATA16,
-		      0xaa, 0xfe, /* Eddystone UUID */
-		      0x10, /* Eddystone-URL frame type */
-		      0x00, /* Calibrated Tx power at 0m */
-		      0x00, /* URL Scheme Prefix http://www. */
-		      'z', 'e', 'p', 'h', 'y', 'r',
-		      'p', 'r', 'o', 'j', 'e', 'c', 't',
-		      0x08) /* .org */
+	 BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR), //закомментить GENERAL, чтобы не было видно в списке устройств
+	
 };
+
 
 /* Set Scan Response data */
 static const struct bt_data sd[] = {
@@ -221,20 +215,12 @@ int main(void)
 		return 0;
 	}
 
-
-		
-//
-
 	set_public_addr();
 	uint32_t max_period;
 	uint32_t period;
 	uint8_t dir = 0U;
 
-
-
-
-		int err;	
-		printk("Starting Beacon Demo\n");
+	int err;	
 
 	/* Initialize the Bluetooth Subsystem */
 	
@@ -264,38 +250,43 @@ int main(void)
 			free_table();
 			maxRSSi=-100;
 		}
-		k_sleep(K_MSEC(400));
+		//k_sleep(K_MSEC(400));
 		int device_count = count_records();
-		if(deviceFound&&(device_count>=2)&&(maxRSSi>=RVVAL)){
-				//ret = pwm_set_dt(&pwm_led0, period, period/2);
-		//ret = gpio_pin_toggle_dt(&red);
+		if(deviceFound&&(device_count>=1)&&(maxRSSi>=RVVAL)){
+		
 		gpio_pin_set(green.port,green.pin,0);
 		
 		if (ret < 0) {
 			return 0;
 		}
 		/* Start advertising */
-		err = bt_le_adv_start(BT_LE_ADV_NCONN_IDENTITY, ad, ARRAY_SIZE(ad),
+		struct bt_le_adv_param adv_param = {
+    		.id = BT_ID_DEFAULT,
+    		.sid = 0,
+    		.secondary_max_skip = 0,
+    		.options = BT_LE_ADV_OPT_USE_IDENTITY,
+    		.interval_min = BT_GAP_ADV_FAST_INT_MIN_1,
+    		.interval_max = BT_GAP_ADV_FAST_INT_MIN_1,
+    		.peer = NULL,
+		}; //BT_LE_ADV_OPT_USE_IDENTITY, BT_GAP_ADV_FAST_INT_MIN_2, BT_GAP_ADV_FAST_INT_MAX_2, NULL
+		err = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad),
 			      sd, ARRAY_SIZE(sd));
-		if (err) {
-			printk("Advertising failed to start (err %d)\n", err);
-			return 0;
-		}
-
-		k_sleep(K_MSEC(400));
-		
+			if (err) {
+				printk("Advertising failed to start (err %d)\n", err);
+				return 0;
+			}
+		k_sleep(K_MSEC(10400));
 		}else {
+			
 			gpio_pin_set(green.port,green.pin,1);
 			free_table();
 		}
 		err = bt_le_adv_stop();
-		deviceFound = false;
-		
-		if (err) {
+			if (err) {
 			printk("Advertising failed to stop (err %d)\n", err);
 			return 0;
-		}
+			}
+		deviceFound = false;
 	} while (1);
 	return 0;
-	//return 0;
 }
