@@ -22,7 +22,7 @@
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
-#define RVVAL -70
+#define RVVAL -60
 
 static const struct gpio_dt_spec green = GPIO_DT_SPEC_GET(LED1_NODE, gpios);
 static const struct gpio_dt_spec red = GPIO_DT_SPEC_GET(LED2_NODE, gpios);
@@ -245,14 +245,14 @@ int main(void)
 	int reset_counter = 0;
 	do {
 		reset_counter++;
-		if(reset_counter>5){
+		if(reset_counter>1){
 			reset_counter=0;
 			free_table();
 			maxRSSi=-100;
 		}
-		//k_sleep(K_MSEC(400));
+		k_sleep(K_MSEC(400));
 		int device_count = count_records();
-		if(deviceFound&&(device_count>=1)&&(maxRSSi>=RVVAL)){
+		if((device_count>=2)&&(maxRSSi>=RVVAL)){ //deviceFound&&
 		
 		gpio_pin_set(green.port,green.pin,0);
 		
@@ -275,7 +275,7 @@ int main(void)
 				printk("Advertising failed to start (err %d)\n", err);
 				return 0;
 			}
-		k_sleep(K_MSEC(10400));
+		k_sleep(K_MSEC(400));
 		}else {
 			
 			gpio_pin_set(green.port,green.pin,1);
