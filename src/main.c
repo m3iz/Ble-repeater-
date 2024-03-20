@@ -14,7 +14,7 @@
 
 
 #define SLEEP_TIME_MS   1
-#define TABLE_SIZE 100
+#define TABLE_SIZE 256
 
 #define LED1_NODE DT_ALIAS(led1) //green
 #define LED2_NODE DT_ALIAS(led2) //red
@@ -22,7 +22,7 @@
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
-#define RVVAL -60
+#define RVVAL -50
 
 static const struct gpio_dt_spec green = GPIO_DT_SPEC_GET(LED1_NODE, gpios);
 static const struct gpio_dt_spec red = GPIO_DT_SPEC_GET(LED2_NODE, gpios);
@@ -40,11 +40,14 @@ typedef struct node {
 node_t* hash_table[TABLE_SIZE];
 
 unsigned int hash(char* mac) {
-    unsigned int hash_value = 0;
-	int mac_len =  strlen(mac);
-    for (int i = 0; i < mac_len; i++) {
-        hash_value = hash_value * 37 + mac[i];
+    unsigned long hash_value = 0;
+    int c;
+
+    while ((c = *mac++)) {
+        if (c == ':') continue; // Пропускаем символы разделителя
+        hash_value = hash_value * 37 + c;
     }
+
     return hash_value % TABLE_SIZE;
 }
 
@@ -134,6 +137,8 @@ static void set_public_addr(void)
 	bt_ctlr_set_public_addr(pub_addr);
 }
 
+
+
 static void scan_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
 		    struct net_buf_simple *buf)
 {
@@ -141,17 +146,19 @@ static void scan_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
 	bt_addr_t tempadr=temp.a;
 	
     if((tempadr.val[5]==16)&&(tempadr.val[4]==0)&&(tempadr.val[3]==0)){
-		char mac[1];
-		//bt_addr_le_to_str(tempadr.val, mac, 6);
-		mac[0]=16;
-		node_t* result = search(tempadr.val[2]);
+		char mac_str[18];
+
+		bt_addr_le_to_str(addr, mac_str, sizeof(mac_str));
+		
+		unsigned int del = hash(mac_str);
+		node_t* result = search(mac_str);
     	if (result != NULL) {
        		 printf("Найдено: %s -> RSSI: %d\n", result->mac, result->rssi);
 			 result->rssi=rssi;
     	}
     	else {
         	printf("MAC-адрес не найден\n");
-			insert(tempadr.val[2], rssi);
+			insert(mac_str, rssi);
    		}
 		deviceFound = true;
 
@@ -244,15 +251,10 @@ int main(void)
 	printk("Starting Scanner/Advertiser Demo\n");
 	int reset_counter = 0;
 	do {
-		reset_counter++;
-		if(reset_counter>1){
-			reset_counter=0;
-			free_table();
-			maxRSSi=-100;
-		}
+		free_table();
 		k_sleep(K_MSEC(400));
 		int device_count = count_records();
-		if((device_count>=2)&&(maxRSSi>=RVVAL)){ //deviceFound&&
+		if((device_count>=1)&&(maxRSSi>=RVVAL)){ //deviceFound&&
 		
 		gpio_pin_set(green.port,green.pin,0);
 		
@@ -275,17 +277,26 @@ int main(void)
 				printk("Advertising failed to start (err %d)\n", err);
 				return 0;
 			}
-		k_sleep(K_MSEC(400));
+		k_sleep(K_MSEC(1400));
 		}else {
 			
-			gpio_pin_set(green.port,green.pin,1);
-			free_table();
+			if(device_count<=2){
+				reset_counter++;
+				if(reset_counter>10){
+					reset_counter=0;
+					free_table();
+					maxRSSi=-100;
+					gpio_pin_set(green.port,green.pin,1);
+			}
+		}
+			
 		}
 		err = bt_le_adv_stop();
 			if (err) {
 			printk("Advertising failed to stop (err %d)\n", err);
 			return 0;
 			}
+			
 		deviceFound = false;
 	} while (1);
 	return 0;
