@@ -22,7 +22,7 @@
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
-#define RVVAL -50
+#define RVVAL -65
 
 static const struct gpio_dt_spec green = GPIO_DT_SPEC_GET(LED1_NODE, gpios);
 static const struct gpio_dt_spec red = GPIO_DT_SPEC_GET(LED2_NODE, gpios);
@@ -250,17 +250,23 @@ int main(void)
 	}
 	printk("Starting Scanner/Advertiser Demo\n");
 	int reset_counter = 0;
+	int up_counter = 0;
 	do {
 		free_table();
 		k_sleep(K_MSEC(400));
 		int device_count = count_records();
 		if((device_count>=1)&&(maxRSSi>=RVVAL)){ //deviceFound&&
-		
-		gpio_pin_set(green.port,green.pin,0);
-		
-		if (ret < 0) {
-			return 0;
-		}
+			reset_counter = 0;
+			if(up_counter<=10)up_counter++;
+			if(up_counter>=10){
+				if(device_count>=2){
+					gpio_pin_set(red.port,red.pin,0);
+					gpio_pin_set(green.port,green.pin,1);
+				}
+				else{
+					gpio_pin_set(red.port,red.pin,1);
+					gpio_pin_set(green.port,green.pin,0);
+				}
 		/* Start advertising */
 		struct bt_le_adv_param adv_param = {
     		.id = BT_ID_DEFAULT,
@@ -278,15 +284,18 @@ int main(void)
 				return 0;
 			}
 		k_sleep(K_MSEC(1400));
+		}
 		}else {
 			
 			if(device_count<=2){
+				up_counter = 0;
 				reset_counter++;
 				if(reset_counter>10){
 					reset_counter=0;
 					free_table();
 					maxRSSi=-100;
 					gpio_pin_set(green.port,green.pin,1);
+					gpio_pin_set(red.port,red.pin,1);
 			}
 		}
 			
