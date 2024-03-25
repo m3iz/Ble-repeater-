@@ -35,6 +35,9 @@ int maxRSSi=-100;
 typedef struct node {
     char mac[18]; // MAC-адрес в формате "XX:XX:XX:XX:XX:XX"
     int rssi;
+	int rssi_mas[15];
+	int rssi_it;
+	int rssi_avg;
     struct node* next;
 } node_t;
 
@@ -52,11 +55,15 @@ unsigned int hash(char* mac) {
     return hash_value % TABLE_SIZE;
 }
 
-void insert(char* mac, int rssi) {
+void insert(char* mac, int rssi, int i) {
     unsigned int index = hash(mac);
     node_t* new_node = (node_t*)malloc(sizeof(node_t));
     strcpy(new_node->mac, mac);
     new_node->rssi = rssi;
+	new_node->rssi_it = i;
+	memset(new_node->rssi_mas, 0, sizeof(new_node->rssi_mas));
+	new_node->rssi_mas[i] = rssi;
+	new_node->rssi_it++;
     new_node->next = hash_table[index];
     hash_table[index] = new_node;
 }
@@ -154,12 +161,23 @@ static void scan_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
 		unsigned int del = hash(mac_str);
 		node_t* result = search(mac_str);
     	if (result != NULL) {
-       		 printf("Найдено: %s -> RSSI: %d\n", result->mac, result->rssi);
+       		 //printf("Найдено: %s -> RSSI: %d\n", result->mac, result->rssi);
 			 result->rssi=rssi;
+			 if(result->rssi_it==15)result->rssi_it = 0;
+			 result->rssi_mas[result->rssi_it] = rssi;
+			 result->rssi_it++;
+			 int sum=0;
+			 
+			 for(int i=0;i<15;i++){
+				sum+=result->rssi_mas[i];
+				 printf("[%d] - %d\n",i,result->rssi_mas[i]);
+			 }
+			 sum/=15;
+			 printf("%d",sum);
     	}
     	else {
         	printf("MAC-адрес не найден\n");
-			insert(mac_str, rssi);
+			insert(mac_str, rssi, 0);
    		}
 		deviceFound = true;
 
@@ -253,21 +271,15 @@ int main(void)
 	int reset_counter = 0;
 	int up_counter = 0;
 	do {
-		free_table();
+		//free_table();
 		k_sleep(K_MSEC(400));
 		int device_count = count_records();
 		if((device_count>=2)&&(maxRSSi>=RVVAL)){ //deviceFound&&
 			reset_counter = 0;
 			if(up_counter<=RCOUNT)up_counter++;
 			if(up_counter>=RCOUNT){
-				if(device_count>=2){
-					gpio_pin_set(red.port,red.pin,0);
+				gpio_pin_set(red.port,red.pin,0);
 					//gpio_pin_set(green.port,green.pin,1);
-				}
-				else{
-					gpio_pin_set(red.port,red.pin,1);
-					gpio_pin_set(green.port,green.pin,0);
-				}
 		/* Start advertising */
 		struct bt_le_adv_param adv_param = {
     		.id = BT_ID_DEFAULT,
@@ -293,7 +305,7 @@ int main(void)
 				reset_counter++;
 				if(reset_counter>5){
 					reset_counter=0;
-					free_table();
+					//free_table();
 					maxRSSi=-100;
 					//gpio_pin_set(green.port,green.pin,1);
 					gpio_pin_set(red.port,red.pin,1);
