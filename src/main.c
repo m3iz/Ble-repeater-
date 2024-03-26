@@ -22,8 +22,9 @@
 
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
-#define RVVAL -63
+#define RVVAL -70
 #define RCOUNT 3
+#define DNUM 2
 
 static const struct gpio_dt_spec green = GPIO_DT_SPEC_GET(LED1_NODE, gpios);
 static const struct gpio_dt_spec red = GPIO_DT_SPEC_GET(LED2_NODE, gpios);
@@ -37,7 +38,7 @@ typedef struct node {
     int rssi;
 	int rssi_mas[15];
 	int rssi_it;
-	int rssi_avg;
+	int inzone;
     struct node* next;
 } node_t;
 
@@ -61,8 +62,9 @@ void insert(char* mac, int rssi, int i) {
     strcpy(new_node->mac, mac);
     new_node->rssi = rssi;
 	new_node->rssi_it = i;
-	memset(new_node->rssi_mas, 0, sizeof(new_node->rssi_mas));
+	memset(new_node->rssi_mas, -100, sizeof(new_node->rssi_mas));
 	new_node->rssi_mas[i] = rssi;
+	new_node->inzone=0;
 	new_node->rssi_it++;
     new_node->next = hash_table[index];
     hash_table[index] = new_node;
@@ -163,17 +165,26 @@ static void scan_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
     	if (result != NULL) {
        		 //printf("Найдено: %s -> RSSI: %d\n", result->mac, result->rssi);
 			 result->rssi=rssi;
-			 if(result->rssi_it==15)result->rssi_it = 0;
-			 result->rssi_mas[result->rssi_it] = rssi;
-			 result->rssi_it++;
-			 int sum=0;
-			 
-			 for(int i=0;i<15;i++){
+			 if(result->rssi_it==15){
+				int sum=0;
+				result->rssi_it = 0;
+				for(int i=0;i<15;i++){
 				sum+=result->rssi_mas[i];
-				 printf("[%d] - %d\n",i,result->rssi_mas[i]);
+				 //printf("[%d] - %d\n",i,result->rssi_mas[i]);
 			 }
 			 sum/=15;
 			 printf("%d",sum);
+			 if(sum>RVVAL){
+				result->inzone++;
+			 	//printf("IN ZONE %d",sum);
+			 }
+			 else result->inzone=0;
+			 }
+			 result->rssi_mas[result->rssi_it] = rssi;
+			 result->rssi_it++;
+			  
+			 //int j=
+			 
     	}
     	else {
         	printf("MAC-адрес не найден\n");
@@ -191,7 +202,7 @@ int count_records() {
         node_t* current = hash_table[i];
         while (current != NULL) {
 			if(maxRSSi<current->rssi)maxRSSi=current->rssi;
-			if(current->rssi>=RVVAL)
+			if(current->inzone>=3)//if(current->rssi>=RVVAL)
             	count++;
             current = current->next;
         }
@@ -274,7 +285,8 @@ int main(void)
 		//free_table();
 		k_sleep(K_MSEC(400));
 		int device_count = count_records();
-		if((device_count>=2)&&(maxRSSi>=RVVAL)){ //deviceFound&&
+		if((device_count>=DNUM)&&(maxRSSi>=RVVAL)){ 
+			printf("Inzone");//deviceFound&&
 			reset_counter = 0;
 			if(up_counter<=RCOUNT)up_counter++;
 			if(up_counter>=RCOUNT){
@@ -299,8 +311,7 @@ int main(void)
 		k_sleep(K_MSEC(1400));
 		}
 		}else {
-			
-			if(device_count<=2){
+			if(device_count<=DNUM){
 				up_counter = 0;
 				reset_counter++;
 				if(reset_counter>5){
